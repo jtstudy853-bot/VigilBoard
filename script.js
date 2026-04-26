@@ -490,12 +490,13 @@ async function btDisconnect() {
 // Send a command to the connected device
 async function sendCmd(cmd) {
   btLog(`TX → ${cmd}`, 'info');
-  if (!btConnected || !btTx) {
+  if (!btConnected || !btTx || !(btDevice && btDevice.gatt && btDevice.gatt.connected)) {
     btLog('Connect a Bluetooth device first.', 'err');
     return;
   }
   try {
-    await btTx.writeValue(new TextEncoder().encode(cmd + '\\n'));
+    const encoded = new TextEncoder().encode(cmd + '\n');
+    await btTx.writeValue(encoded);
     btLog(`Sent: ${cmd}`, 'ok');
   } catch (e) {
     btLog(`Send failed: ${e.message}`, 'err');
