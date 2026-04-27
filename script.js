@@ -363,44 +363,57 @@ async function btScan() {
 
 // Connect to a specific Bluetooth device
 async function btConnectDevice(dev) {
-  if (!dev) {
-    btLog('No device selected.', 'err');
-    return;
-  }
+  if (!dev) return;
+
   btLog(`Connecting to ${dev.name || 'device'}…`, 'info');
+
   try {
     const server = await dev.gatt.connect();
-    const svc = await server.getPrimaryService(NUS_SERVICE_UUID);
-    btTx = await svc.getCharacteristic(NUS_RX_CHAR_UUID);
-    btNotifyChar = await svc.getCharacteristic(NUS_TX_CHAR_UUID);
+
+    // 🔴 IMPORTANT: micro:bit needs settle time
+    await new Promise(r => setTimeout(r, 800));
+
+    // ===============================
+    // USE DIRECT SERVICE ACCESS (NOT ENUMERATION)
+    // ===============================
+    const service = await server.getPrimaryService(
+      NUS_SERVICE_UUID
+    );
+
+    const tx = await service.getCharacteristic(
+      NUS_RX_CHAR_UUID
+    );
+
+    const rx = await service.getCharacteristic(
+      NUS_TX_CHAR_UUID
+    );
+
+    btTx = tx;
+    btNotifyChar = rx;
+
     await btNotifyChar.startNotifications();
-    btNotifyChar.addEventListener('characteristicvaluechanged', handleUartNotification);
+    btNotifyChar.addEventListener(
+      'characteristicvaluechanged',
+      handleUartNotification
+    );
 
     btDevice = dev;
     btConnected = true;
+
     setConnectedUI(dev.name || 'micro:bit');
-    btLog(`Connected to ${dev.name || 'device'}`, 'ok');
-    addAlert({
-      icon: '✅',
-      lvl: 'info',
-      title: 'Bluetooth connected',
-      src: 'Bluetooth',
-      urgency: 'l',
-      unread: false,
-      body: `Connected to ${dev.name || 'micro:bit'}.`
-    });
+
+    btLog("Connected ✓", "ok");
+
+    await sendCmd("PING");
 
     dev.addEventListener('gattserverdisconnected', () => {
       btConnected = false;
-      if (btNotifyChar) {
-        btNotifyChar.removeEventListener('characteristicvaluechanged', handleUartNotification);
-        btNotifyChar = null;
-      }
       btTx = null;
+      btNotifyChar = null;
       btDevice = null;
       uartBuffer = '';
       setDisconnectedUI();
-      btLog('Device disconnected.', 'err');
+      btLog('Disconnected', 'err');
       addAlert({
         icon: '⚠️',
         lvl: 'warn',
@@ -411,7 +424,9 @@ async function btConnectDevice(dev) {
         body: 'The micro:bit was disconnected.'
       });
       renderDeviceEmptyState('No device connected');
+
     });
+
   } catch (e) {
     btLog(`Connection failed: ${e.message}`, 'err');
     addAlert({
