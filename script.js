@@ -31,7 +31,7 @@ let alerts = [{
   icon: '✅',
   lvl: 'info',
   title: 'App Ready',
-  src: 'AlertBridge',
+  src: 'VigilBoard',
   time: '--:--',
   urgency: 'l',
   unread: false,
