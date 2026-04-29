@@ -370,19 +370,37 @@ async function btConnectDevice(dev) {
   try {
     const server = await dev.gatt.connect();
 
-    // 🔴 IMPORTANT: micro:bit needs settle time
-    await new Promise(r => setTimeout(r, 800));
-
-    // ===============================
-    // USE DIRECT SERVICE ACCESS (NOT ENUMERATION)
-    // ===============================
-    const service = await server.getPrimaryService(
-      NUS_SERVICE_UUID
-    );
-
-    const tx = await service.getCharacteristic(
-      NUS_RX_CHAR_UUID
-    );
+    // Wait until UART service is actually available
+    async function getUartService(server, retries = 6) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+            return service;
+          } catch (e) {
+            console.log("Retrying service discovery...", i);
+            await new Promise(r => setTimeout(r, 300));
+          }
+        }
+        throw new Error("UART service not available");
+      }
+      
+      const service = await getUartService(server);
+      
+      // (Optional debug AFTER service is ready)
+      const services = await server.getPrimaryServices();
+      services.forEach(s => console.log("Service:", s.uuid));
+      
+      const tx = await service.getCharacteristic(NUS_RX_CHAR_UUID);
+      const rx = await service.getCharacteristic(NUS_TX_CHAR_UUID);
+      
+      btTx = tx;
+      btNotifyChar = rx;
+      
+      await btNotifyChar.startNotifications();
+      btNotifyChar.addEventListener(
+        'characteristicvaluechanged',
+        handleUartNotification
+      );
 
     const rx = await service.getCharacteristic(
       NUS_TX_CHAR_UUID
